@@ -1,0 +1,5 @@
+-- Initializes Flyway history for the AIASPES Identity service.
+--
+-- This migration intentionally creates no application tables yet because the
+-- first persisted identity model has not been finalized. Future schema changes
+-- must be added as immutable Flyway migrations.

@@ -77,6 +77,7 @@ Verified:
 - Artifact ID: `aiaspes-identity`
 - Base package: `com.blissfuljuan.aiaspes.identity`
 - Current source surface: Spring Boot application class and one context-load test
+- PostgreSQL/Flyway database setup branch: `feat/database-connection`
 
 Baseline validation:
 
@@ -114,7 +115,9 @@ Foundation documents:
 - `README.md`
 - `docs/architecture/module-boundaries.md`
 - `docs/architecture/identity-foundation.md`
+- `docs/architecture/persistence-conventions.md`
 - `docs/adr/ADR-001-identity-service-boundary-and-foundation.md`
+- `docs/adr/ADR-002-postgresql-flyway-persistence.md`
 
 Documented but not implemented:
 
@@ -124,6 +127,67 @@ Documented but not implemented:
 - authentication strategy options
 - cross-module authenticated user context questions
 - event candidates
+- PostgreSQL/Flyway persistence foundation
+
+## Phase 3 Database Connection Foundation
+
+Status: configured on `feat/database-connection`.
+
+Confirmed:
+
+- PostgreSQL is the main Identity database.
+- Supabase may be used as the managed PostgreSQL provider for database hosting only.
+- Supabase Auth is not part of the current Identity foundation.
+- Database settings are supplied through environment variables.
+- Local development may load database settings from `.env`.
+- Real `.env` files are ignored by Git.
+- `.env.example` is committed as the local template.
+- Flyway owns schema migrations.
+- Hibernate validates schema with `ddl-auto=validate`.
+- Open Session In View is disabled.
+- Identity uses the shared/default PostgreSQL schema.
+- Flyway uses `identity_flyway_schema_history` so Identity migrations do not collide with another service's Flyway versions.
+- Flyway uses `baseline-on-migrate=true` because the shared/default schema may already be non-empty.
+
+Required environment variables:
+
+- `DB_URL`
+- `DB_USERNAME`
+- `DB_PASSWORD`
+
+Optional environment variables:
+
+- `DB_POOL_MAX_SIZE`
+- `DB_POOL_MIN_IDLE`
+- `DB_CONNECTION_TIMEOUT_MS`
+- `DB_VALIDATION_TIMEOUT_MS`
+- `DB_IDLE_TIMEOUT_MS`
+- `DB_MAX_LIFETIME_MS`
+
+Supabase deployment notes:
+
+- IPv4-only deployments should use a Supabase pooler connection string in `DB_URL`.
+- Persistent Spring Boot service deployments should prefer Supavisor session mode.
+- Transaction mode should be reserved for serverless or short-lived workloads.
+- If transaction mode is used, prepared statements must be disabled in the JDBC URL.
+- Hikari pool sizes should stay conservative across Identity and other AIASPES services.
+
+Current migration state:
+
+- `V1__initialize_identity_schema.sql` is intentionally comment-only.
+- Flyway migration history is stored in `identity_flyway_schema_history`.
+- In a non-empty shared/default schema, Flyway baselines Identity at version 1 and future application tables should start with V2.
+- No application tables exist yet because the first persisted Identity model has not been finalized.
+
+Validation evidence:
+
+- Local `.env` exists and is ignored by Git.
+- `mvn spring-boot:run` connected to PostgreSQL through `.env`.
+- Flyway created `public.identity_flyway_schema_history` in the shared/default schema.
+- Flyway baselined Identity at version 1 because the shared/default schema was already non-empty.
+- The next Identity application migration should start at V2.
+- `mvn test` passed with 1 test, 0 failures, 0 errors, 0 skipped.
+- Non-escalated Maven commands still fail in this workspace because Maven Central access is sandboxed.
 
 ## Current Project State
 
@@ -135,7 +199,8 @@ Confirmed current state:
 - No authentication approach has been finalized.
 - No role persistence model has been finalized.
 - No API contracts have been finalized.
-- No database schema has been defined.
+- PostgreSQL connection configuration has been defined.
+- No application database tables have been defined.
 
 ## Planned Items
 
@@ -150,7 +215,7 @@ Planned, not yet confirmed as implementation:
 - Token or session strategy
 - Cross-module authenticated user context for Project Intake
 - Cross-service contracts with the API Gateway, Project Intake, and any event broker/message bus
-- Persistence and migration strategy
+- First application persistence migration
 - API error/response convention
 
 ## Open Questions
@@ -163,7 +228,7 @@ Planned, not yet confirmed as implementation:
 - How should Project Intake validate or consume identity/access context?
 - Should backend services verify Identity-issued tokens directly or trust signed gateway-provided identity headers?
 - Which Identity changes should emit events/messages for other services?
-- Which database should Identity use?
+- Which Identity model should become the first persisted table?
 
 ## Next Recommended Step
 
@@ -171,7 +236,7 @@ Before feature implementation:
 
 1. Decide and document the authentication/token strategy.
 2. Decide and document the role/access-role model.
-3. Decide and document the persistence and migration strategy.
+3. Add the first application persistence migration after the first persisted model is accepted.
 4. Define the authenticated user context contract for Project Intake.
 5. Add architecture tests when package boundaries are created.
 6. Add or update tests alongside each implementation slice.

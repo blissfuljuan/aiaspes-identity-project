@@ -25,7 +25,7 @@ Not yet implemented:
 - Authentication/login
 - Role assignment
 - Access checks
-- Persistence schema
+- Application persistence schema
 - Cross-module authenticated user context
 
 ## Service Scope
@@ -77,4 +77,52 @@ Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
 - `PROJECT_STATUS.md` records the latest continuation checkpoint.
 - `docs/architecture/module-boundaries.md` records service boundaries and package direction.
 - `docs/architecture/identity-foundation.md` records planned foundation decisions before feature implementation.
+- `docs/architecture/persistence-conventions.md` records PostgreSQL and Flyway conventions.
 - `docs/adr/ADR-001-identity-service-boundary-and-foundation.md` records the first architecture decision.
+- `docs/adr/ADR-002-postgresql-flyway-persistence.md` records the database foundation decision.
+
+## Database Configuration
+
+PostgreSQL is the main Identity database. Runtime configuration is read from environment variables:
+
+```text
+DB_URL
+DB_USERNAME
+DB_PASSWORD
+```
+
+Optional connection-pool settings:
+
+```text
+DB_POOL_MAX_SIZE
+DB_POOL_MIN_IDLE
+DB_CONNECTION_TIMEOUT_MS
+DB_VALIDATION_TIMEOUT_MS
+DB_IDLE_TIMEOUT_MS
+DB_MAX_LIFETIME_MS
+```
+
+For local development, copy `.env.example` to `.env` and fill in local values. The real `.env` file is ignored and must not be committed.
+
+Schema management:
+
+- Flyway migrations live in `src/main/resources/db/migration`.
+- Identity uses the shared/default PostgreSQL schema.
+- Flyway uses `identity_flyway_schema_history` so Identity migrations do not collide with another service's Flyway versions.
+- Flyway baselines on migrate because the shared/default schema may already contain objects from local development or other modules.
+- Hibernate uses `ddl-auto=validate`.
+- Open Session In View is disabled.
+
+## Supabase Deployment Notes
+
+Supabase should be used as a managed PostgreSQL database only for this service. Do not use Supabase Auth unless a future Identity ADR explicitly chooses it.
+
+For IPv4-only deployment environments:
+
+- Use the Supabase pooler connection string in `DB_URL`.
+- Prefer Supavisor session mode for persistent Spring Boot services.
+- Use transaction mode only for serverless or short-lived workloads.
+- If transaction mode is used, disable prepared statements in the JDBC URL because transaction pooling does not support them.
+- Keep Hikari pool sizes conservative and tune them with `DB_POOL_MAX_SIZE` and `DB_POOL_MIN_IDLE`.
+
+Real Supabase credentials belong in local `.env` or production secret settings, not in Git.
